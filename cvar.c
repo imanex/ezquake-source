@@ -343,6 +343,41 @@ void Cvar_Set(cvar_t *var, char *value)
 	Cvar_SetEx(var, value, false);
 }
 
+void Cvar_AutoSet(cvar_t *var, char *value)
+{
+	if (!var || !(var->flags & CVAR_AUTO) || !value) {
+		return;
+	}
+
+	Q_free(var->autoString);
+
+	var->autoString = strdup(value);
+}
+
+void Cvar_AutoSetInt(cvar_t *var, int value)
+{
+	char val[128];
+
+	if (!var || !(var->flags & CVAR_AUTO)) {
+		return;
+	}
+
+	Q_free(var->autoString);
+
+	snprintf(&val[0], sizeof(val), "%d", value);
+
+	var->autoString = strdup(val);
+}
+
+void Cvar_AutoReset(cvar_t *var)
+{
+	if (!var) {
+		return;
+	}
+
+	Q_free(var->autoString);
+}
+
 void Cvar_ForceSet (cvar_t *var, char *value)
 {
 	int saved_flags;
@@ -600,7 +635,6 @@ void Cvar_Register (cvar_t *var)
 qbool Cvar_Command (void)
 {
 	cvar_t *v;
-	char *spaces;
 
 	// check variables
 	if (!(v = Cvar_Find (Cmd_Argv(0))))
@@ -611,18 +645,30 @@ qbool Cvar_Command (void)
 			Help_DescribeCvar (v);
 
 		if (cvar_viewdefault.value) {
+			char *spaces = CreateSpaces(strlen(v->name) + 2);
+
 			Com_Printf ("%s : default value is \"%s\"\n", v->name, v->defaultvalue);
-			spaces = CreateSpaces(strlen(v->name) + 2);
+
 			Com_Printf ("%s current value is \"%s\"\n", spaces, v->string);
 
-			if (cvar_viewlatched.integer && v->latchedString)
+			if ((v->flags & CVAR_AUTO) && v->autoString) {
+				Com_Printf ("%s auto    value is \"%s\"\n", spaces, v->autoString);
+			}
+
+			if (cvar_viewlatched.integer && v->latchedString) {
 				Com_Printf ("%s latched value is \"%s\"\n", spaces, v->latchedString);
+			}
 
 		} else {
 			Com_Printf ("\"%s\" is \"%s\"\n", v->name, v->string);
 
-			if (cvar_viewlatched.integer && v->latchedString)
+			if ((v->flags & CVAR_AUTO) && v->autoString) {
+				Com_Printf ("auto: \"%s\"\n", v->autoString);
+			}
+
+			if (cvar_viewlatched.integer && v->latchedString) {
 				Com_Printf ("latched: \"%s\"\n", v->latchedString);
+			}
 		}
 	} else {
 		// RestrictTriggers means that advanced (possibly cheaty) scripts are not allowed

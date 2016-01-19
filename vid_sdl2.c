@@ -105,12 +105,12 @@ cvar_t r_colorbits            = {"vid_colorbits",         "0",   CVAR_LATCH };
 cvar_t r_24bit_depth          = {"vid_24bit_depth",       "1",   CVAR_LATCH };
 cvar_t r_stereo               = {"vid_stereo",            "0",   CVAR_LATCH };
 cvar_t r_fullscreen           = {"vid_fullscreen",        "1",   CVAR_LATCH };
-cvar_t r_displayRefresh       = {"vid_displayfrequency",  "0",   CVAR_LATCH };
+cvar_t r_displayRefresh       = {"vid_displayfrequency",  "0",   CVAR_LATCH | CVAR_AUTO };
 cvar_t vid_displayNumber      = {"vid_displaynumber",     "0",   CVAR_LATCH };
 cvar_t vid_usedesktopres      = {"vid_usedesktopres",     "1",   CVAR_LATCH };
 cvar_t vid_win_borderless     = {"vid_win_borderless",    "0",   CVAR_LATCH };
-cvar_t vid_width              = {"vid_width",             "0",   CVAR_LATCH };
-cvar_t vid_height             = {"vid_height",            "0",   CVAR_LATCH };
+cvar_t vid_width              = {"vid_width",             "0",   CVAR_LATCH | CVAR_AUTO };
+cvar_t vid_height             = {"vid_height",            "0",   CVAR_LATCH | CVAR_AUTO };
 cvar_t vid_win_width          = {"vid_win_width",         "640", CVAR_LATCH };
 cvar_t vid_win_height         = {"vid_win_height",        "480", CVAR_LATCH };
 cvar_t vid_hwgammacontrol     = {"vid_hwgammacontrol",    "2",   CVAR_LATCH };
@@ -127,8 +127,8 @@ cvar_t r_win_save_size        = {"vid_win_save_size",     "1",   CVAR_SILENT };
 cvar_t vid_xpos               = {"vid_xpos",              "3",   CVAR_SILENT };
 cvar_t vid_ypos               = {"vid_ypos",              "39",  CVAR_SILENT };
 cvar_t vid_win_displayNumber  = {"vid_win_displaynumber", "0",   CVAR_SILENT };
-cvar_t r_conwidth             = {"vid_conwidth",          "0",   CVAR_NO_RESET | CVAR_SILENT, conres_changed_callback };
-cvar_t r_conheight            = {"vid_conheight",         "0",   CVAR_NO_RESET | CVAR_SILENT, conres_changed_callback };
+cvar_t r_conwidth             = {"vid_conwidth",          "0",   CVAR_NO_RESET | CVAR_SILENT | CVAR_AUTO, conres_changed_callback };
+cvar_t r_conheight            = {"vid_conheight",         "0",   CVAR_NO_RESET | CVAR_SILENT | CVAR_AUTO, conres_changed_callback };
 cvar_t r_conscale             = {"vid_conscale",          "2.0", CVAR_NO_RESET | CVAR_SILENT, conres_changed_callback };
 cvar_t vid_flashonactivity    = {"vid_flashonactivity",   "1",   CVAR_SILENT };
 cvar_t r_verbose              = {"vid_verbose",           "0",   CVAR_SILENT };
@@ -802,7 +802,13 @@ int VID_GetCurrentModeIndex(void)
 		}
 	}
 
-	return best_idx >= 0 ? best_idx : -1;
+	if (best_idx >= 0) {
+		Cvar_AutoSetInt(&r_displayRefresh, modelist[best_idx].refresh_rate);
+
+		return best_idx;
+	}
+
+	return -1;
 }
 
 int VID_GetModeIndexCount(void) {
@@ -1327,14 +1333,34 @@ void VID_RegisterCommands(void)
 
 static void VID_UpdateConRes(void)
 {
+	Cvar_AutoReset(&r_conwidth);
+	Cvar_AutoReset(&r_conheight);
+
 	// Default
-	if (r_conwidth.integer == 0 || r_conheight.integer == 0) {
-		vid.width = vid.conwidth = bound(320, (int)(glConfig.vidWidth/r_conscale.value), glConfig.vidWidth);
-		vid.height = vid.conheight = bound(200, (int)(glConfig.vidHeight/r_conscale.value), glConfig.vidHeight);;
+	if (r_conwidth.integer == 0 && r_conheight.integer == 0) {
+		vid.width   = vid.conwidth  = bound(320, (int)(glConfig.vidWidth  / r_conscale.value), glConfig.vidWidth);
+		vid.height  = vid.conheight = bound(200, (int)(glConfig.vidHeight / r_conscale.value), glConfig.vidHeight);
+		Cvar_AutoSetInt(&r_conwidth, vid.conwidth);
+		Cvar_AutoSetInt(&r_conheight, vid.conheight);
+
+	} else if (r_conwidth.integer == 0) {
+		double ar_w = (double)glConfig.vidWidth/(double)glConfig.vidHeight;
+
+		vid.height  = vid.conheight = bound(200, r_conheight.integer, glConfig.vidHeight);
+		vid.width   = vid.conwidth  = bound(320, (int)(r_conheight.integer*ar_w + 0.5), glConfig.vidWidth);
+		Cvar_AutoSetInt(&r_conwidth, vid.conwidth);
+
+	} else if (r_conheight.integer == 0) {
+		double ar_h = (double)glConfig.vidHeight/(double)glConfig.vidWidth;
+
+		vid.height  = vid.conheight = bound(200, (int)(r_conwidth.integer*ar_h + 0.5), glConfig.vidHeight);
+		vid.width   = vid.conwidth  = bound(320, r_conwidth.integer, glConfig.vidWidth);
+		Cvar_AutoSetInt(&r_conheight, vid.conheight);
+
 	} else {
 		// User specified, use that but check boundaries
-		vid.width  = vid.conwidth  = bound(320, r_conwidth.integer, glConfig.vidWidth);
-		vid.height = vid.conheight = bound(200, r_conheight.integer, glConfig.vidHeight);
+		vid.width   = vid.conwidth  = bound(320, r_conwidth.integer,  glConfig.vidWidth);
+		vid.height  = vid.conheight = bound(200, r_conheight.integer, glConfig.vidHeight);
 		Cvar_SetValue(&r_conwidth, vid.conwidth);
 		Cvar_SetValue(&r_conheight, vid.conheight);
 	}
